@@ -1,0 +1,3 @@
+C:/Users/A/VSCodeRepos/http_server/CMakeFiles/http_server.dir
+C:/Users/A/VSCodeRepos/http_server/CMakeFiles/edit_cache.dir
+C:/Users/A/VSCodeRepos/http_server/CMakeFiles/rebuild_cache.dir
