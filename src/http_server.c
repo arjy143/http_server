@@ -11,6 +11,7 @@
 #define BUFFER_SIZE 1024
 
 void handle_client(int client_fd);
+void parse_request_line(const char* request, char* method, int method_size, char* path, int path_size);
 
 int main()
 {
@@ -75,21 +76,58 @@ int main()
 void handle_client(int client_fd)
 {
 	char buffer[BUFFER_SIZE] = {0};
-	int read_val = recv(client_fd, buffer, BUFFER_SIZE, 0);
+	int read_val = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
 	if (read_val < 0)
 	{
 		perror("read");
 		return;
 	}
-	
+
+	buffer[read_val] = '\0';
+
 	printf("Request recieved:\n%s\n", buffer);
 	
-	char* response = 
-	    "HTTP/1.1 200 OK\n"
-        "Content-Type: text/plain\n"
-        "Content-Length: 13\n"
-        "\n"
-        "Hello, world!";
+	char method[16];
+	char path[256];
+	parse_request_line(buffer, method, sizeof(method), path, sizeof(path));
+
+	printf("Method: %s, Path: %s\n", method, path);
+
+	char body[512];
+	snprintf(body, sizeof(body), "You requested %s with method %s", path, method);
+
+	char response[1024];
+	snprintf(response, sizeof(response),
+		"HTTP/1.1 200 OK\r\n"
+		"Content-Type: text/plain\r\n"
+		"Content-Length: %zu\r\n"
+		"\r\n"
+		"%s",
+		strlen(body), body);
 	
 	send(client_fd, response, strlen(response), 0);
+}
+
+void parse_request_line(const char* request, char* method, int method_size, char* path, int path_size)
+{
+	//e.g. GET/index.html would be the first line
+	const char* line_end = strstr(request, "\r\n");
+	if (!line_end)
+	{
+		method[0] = '\0';
+		path[0] = '\0';
+		return;
+	}
+
+	int first_line_length = line_end - request;
+	char temp[256];
+	if (first_line_length > sizeof(temp) -1)
+	{
+		first_line_length = sizeof(temp) -1;
+	}
+	memcpy(temp, request, first_line_length);
+	temp[first_line_length] = '\0';
+
+	//split the line into words
+	sscanf(temp, "%s %s", method, path);
 }

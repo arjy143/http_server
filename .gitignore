@@ -1,5 +1,9 @@
 #ignoring build artifacts
-
+/CMakeFiles/
 build/
 *.o
 *.exe
+*.obj
+*.ninja_deps
+*ninja*
+*.ninja_log
