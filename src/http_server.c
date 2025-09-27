@@ -14,6 +14,8 @@ void handle_client(int client_fd);
 void parse_request_line(const char* request, char* method, int method_size, char* path, int path_size);
 char* open_file(const char* file_path, int* out_size);
 void serve_file(int client_fd, const char* file_path);
+const char* get_mime_type(const char* file_path);
+
 
 int main()
 {
@@ -97,7 +99,7 @@ void handle_client(int client_fd)
 	printf("Method: %s, Path: %s\n", method, path);
 
 	//deciding what to serve
-	if ((strcmp(path, "/") == 0) || (strcmp(path, "/index.html") == 0))
+	if ((strcmp(path, "/") == 0))
 	{
 		serve_file(client_fd, "www/index.html");
 	}
@@ -201,16 +203,67 @@ void serve_file(int client_fd, const char* file_path)
 		return;
 	}
 	
+	const char* mime_type = get_mime_type(file_path);
 
 	char header[512];
 	snprintf(header, sizeof(header),
 		"HTTP/1.1 200 OK\r\n"
-		"Content-Type: text/html\r\n"
+		"Content-Type: %s\r\n"
 		"Content-Length: %d\r\n"
 		"\r\n",
+		mime_type,
 		file_size);
 	
 	send(client_fd, header, strlen(header), 0);
 	send(client_fd, file_data, file_size, 0);
 	free(file_data);
+}
+
+const char* get_mime_type(const char* file_path)
+{
+	const char* ext = strrchr(file_path, '.');
+	if (!ext)
+	{
+		return "application/octet-stream";
+	}
+	if (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0)
+	{
+		return "text/html";
+	}
+	else if (strcmp(ext, ".css") == 0)
+	{
+		return "text/css";
+	}
+	else if (strcmp(ext, ".js") == 0)
+	{
+		return "application/javascript";
+	}
+	else if (strcmp(ext, ".png") == 0)
+	{
+		return "image/png";
+	}
+	else if (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".jpeg") == 0)
+	{
+		return "image/jpeg";
+	}
+	else if (strcmp(ext, ".gif") == 0)
+	{
+		return "image/gif";
+	}
+	else if (strcmp(ext, ".txt") == 0)
+	{
+		return "text/plain";
+	}
+	else if (strcmp(ext, ".json") == 0)
+	{
+		return "application/json";
+	}
+	else if (strcmp(ext, ".pdf") == 0)
+	{
+		return "application/pdf";
+	}
+	else
+	{
+		return "application/octet-stream";
+	}
 }

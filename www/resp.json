@@ -1,0 +1,9 @@
+{
+    "status": "success",
+    "message": "This is a simple JSON response",
+    "data": {
+        "id": 1,
+        "name": "Sample Item",
+        "active": true
+    }
+}
