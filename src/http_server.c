@@ -12,6 +12,8 @@
 
 void handle_client(int client_fd);
 void parse_request_line(const char* request, char* method, int method_size, char* path, int path_size);
+char* open_file(const char* file_path, int* out_size);
+void serve_file(int client_fd, const char* file_path);
 
 int main()
 {
@@ -21,6 +23,7 @@ int main()
 		printf("failed to init winsock");
 		return 1;
 	}
+	
 	struct sockaddr_in address;
 	int addr_len = sizeof(address);
 	char buffer[BUFFER_SIZE] = {0};
@@ -93,19 +96,31 @@ void handle_client(int client_fd)
 
 	printf("Method: %s, Path: %s\n", method, path);
 
-	char body[512];
-	snprintf(body, sizeof(body), "You requested %s with method %s", path, method);
-
-	char response[1024];
-	snprintf(response, sizeof(response),
-		"HTTP/1.1 200 OK\r\n"
-		"Content-Type: text/plain\r\n"
-		"Content-Length: %zu\r\n"
-		"\r\n"
-		"%s",
-		strlen(body), body);
+	//deciding what to serve
+	if ((strcmp(path, "/") == 0) || (strcmp(path, "/index.html") == 0))
+	{
+		serve_file(client_fd, "index.html");
+	}
+	// else if (strcmp(path, "/file") == 0)
+	// {
+	// 	serve_file(client_fd, "file.bin");
+	// }
+	else
+	{
+		//for other paths, just echo back the method and path
+		const char* not_found_body = "404 not found\n";
+		char response[512];
+		snprintf(response, sizeof(response),
+			"HTTP/1.1 404 Not Found\r\n"
+			"Content-Type: text/plain\r\n"
+			"Content-Length: %zu\r\n"
+			"\r\n"
+			"%s",
+			strlen(not_found_body), not_found_body);
+		send(client_fd, response, strlen(response), 0);
+		return;
+	}
 	
-	send(client_fd, response, strlen(response), 0);
 }
 
 void parse_request_line(const char* request, char* method, int method_size, char* path, int path_size)
@@ -130,4 +145,84 @@ void parse_request_line(const char* request, char* method, int method_size, char
 
 	//split the line into words
 	sscanf(temp, "%s %s", method, path);
+}
+
+char* open_file(const char* file_path, int* out_size)
+{
+	//read binary
+	FILE* file = fopen(file_path, "rb");
+	if (!file)
+	{
+		return NULL;
+	}
+
+	//get file size
+	fseek(file, 0, SEEK_END);
+	int size = ftell(file);
+	//back to start
+	fseek(file, 0, SEEK_SET);
+
+	if (size < 0)
+	{
+		return NULL;
+	}
+
+	char* buffer = (char*)malloc(size);
+	if (!buffer)
+	{
+		fclose(file);
+		return NULL;
+	}
+
+	int read_bytes = fread(buffer, 1, size, file);
+	fclose(file);
+
+	if (read_bytes != size)
+	{
+		free(buffer);
+		return NULL;
+	}
+
+	*out_size = size;
+	return buffer;
+
+}
+
+
+
+
+void serve_file(int client_fd, const char* file_path)
+{
+	int file_size;
+	char* file_data = open_file(file_path, &file_size);
+	
+
+	if (!file_data)
+	{
+		char response[512];
+		const char* not_found_body = "404 not found\n";
+		snprintf(response, sizeof(response),
+			"HTTP/1.1 404 Not Found\r\n"
+			"Content-Type: text/plain\r\n"
+			"Content-Length: %zu\r\n"
+			"\r\n"
+			"%s",
+			strlen(not_found_body), not_found_body);
+
+		send(client_fd, response, strlen(response), 0);
+		return;
+	}
+	
+
+	char header[512];
+	snprintf(header, sizeof(header),
+		"HTTP/1.1 200 OK\r\n"
+		"Content-Type: text/html\r\n"
+		"Content-Length: %d\r\n"
+		"\r\n",
+		file_size);
+	
+	send(client_fd, header, strlen(header), 0);
+	send(client_fd, file_data, file_size, 0);
+	free(file_data);
 }

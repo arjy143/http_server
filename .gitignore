@@ -1,9 +1,11 @@
 #ignoring build artifacts
+/.vscode/
 /CMakeFiles/
 build/
 *.o
 *.exe
 *.obj
-*.ninja_deps
+.ninja_deps
+.ninja_log
 *ninja*
-*.ninja_log
+
