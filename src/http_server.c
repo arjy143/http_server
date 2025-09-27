@@ -99,26 +99,14 @@ void handle_client(int client_fd)
 	//deciding what to serve
 	if ((strcmp(path, "/") == 0) || (strcmp(path, "/index.html") == 0))
 	{
-		serve_file(client_fd, "index.html");
+		serve_file(client_fd, "www/index.html");
 	}
-	// else if (strcmp(path, "/file") == 0)
-	// {
-	// 	serve_file(client_fd, "file.bin");
-	// }
 	else
 	{
-		//for other paths, just echo back the method and path
-		const char* not_found_body = "404 not found\n";
-		char response[512];
-		snprintf(response, sizeof(response),
-			"HTTP/1.1 404 Not Found\r\n"
-			"Content-Type: text/plain\r\n"
-			"Content-Length: %zu\r\n"
-			"\r\n"
-			"%s",
-			strlen(not_found_body), not_found_body);
-		send(client_fd, response, strlen(response), 0);
-		return;
+		char file_path[512];
+    	snprintf(file_path, sizeof(file_path), "www%s", path);
+    	serve_file(client_fd, file_path);
+
 	}
 	
 }
