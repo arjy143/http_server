@@ -15,7 +15,7 @@ void parse_request_line(const char* request, char* method, int method_size, char
 char* open_file(const char* file_path, int* out_size);
 void serve_file(int client_fd, const char* file_path);
 const char* get_mime_type(const char* file_path);
-
+int sanitise_path(const char* path);
 
 int main()
 {
@@ -99,6 +99,22 @@ void handle_client(int client_fd)
 	printf("Method: %s, Path: %s\n", method, path);
 
 	//deciding what to serve
+	if (sanitise_path(path) == 0)
+	{
+		char response[512];
+		const char* forbidden_body = "403 Forbidden\n";
+		snprintf(response, sizeof(response),
+			"HTTP/1.1 403 Forbidden\r\n"
+			"Content-Type: text/plain\r\n"
+			"Content-Length: %zu\r\n"
+			"\r\n"
+			"%s",
+			strlen(forbidden_body), forbidden_body);
+
+		send(client_fd, response, strlen(response), 0);
+		return;
+	}
+
 	if ((strcmp(path, "/") == 0))
 	{
 		serve_file(client_fd, "www/index.html");
@@ -266,4 +282,13 @@ const char* get_mime_type(const char* file_path)
 	{
 		return "application/octet-stream";
 	}
+}
+
+int sanitise_path(const char* path)
+{
+	if (strstr(path, "..") != NULL)
+	{
+		return 0;
+	}
+	return 1;
 }
