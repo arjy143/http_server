@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 
 
@@ -63,10 +64,22 @@ void run_server(int port)
 			perror("accept");
 			continue;
 		}
-		
+		int* client_fd_ptr = malloc(sizeof(int));
+		*client_fd_ptr = client_fd;
+
 		printf("client connected");
-		
-		handle_client(client_fd);
+
+		pthread_t thread;
+		if (pthread_create(&thread, NULL, handle_client, client_fd_ptr) != 0)
+		{
+			perror("pthread_create");
+			free(client_fd_ptr);
+			continue;
+		}
+		else
+		{
+			pthread_detach(thread);
+		}
 		closesocket(client_fd);
 		printf("client disconnected");
 	}
