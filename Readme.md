@@ -1,6 +1,6 @@
 # HTTP Server
 
-This project is a simple HTTP server built using C and CMake as the build system. Currently it only works on Windows.
+This project is a simple HTTP server built using C and CMake as the build system. Compatible for both Windows and Linux.
 
 ## Features
 

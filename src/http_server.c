@@ -1,11 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
 
-#pragma comment(lib, "ws2_32.lib")
+#ifdef _WIN32
+	#include <winsock2.h>
+	#include <ws2tcpip.h>
+	#pragma comment(lib, "ws2_32.lib")
+#else
+	#include <arpa/inet.h>
+	#include <sys/socket.h>
+	#include <netinet/in.h>
+	#include <unistd.h>
+	#include <netdb.h>
+	//making linux use the same function name as windows
+	#define closesocket close
+#endif
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
@@ -19,12 +28,15 @@ int sanitise_path(const char* path);
 
 int main()
 {
-	WSADATA wsa;
-	if (WSAStartup(MAKEWORD(2,2), &wsa) != 0)
-	{
-		printf("failed to init winsock");
-		return 1;
-	}
+	#ifdef _WIN32
+		//windows specific init
+		WSADATA wsa;
+		if (WSAStartup(MAKEWORD(2,2), &wsa) != 0)
+		{
+			printf("failed to init winsock");
+			return 1;
+		}
+	#endif
 	
 	struct sockaddr_in address;
 	int addr_len = sizeof(address);
@@ -74,7 +86,12 @@ int main()
 	}
 	
 	closesocket(server_fd);
-	WSACleanup();
+
+	#ifdef _WIN32
+		//windows specific cleanup
+		WSACleanup();
+	#endif
+
 	return 0;
 }
 
