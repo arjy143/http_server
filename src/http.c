@@ -9,18 +9,24 @@
 
 #define BUFFER_SIZE 1024
 
-void* handle_client(void* client_fd_ptr)
+void* handle_client_thread(void* client_fd_ptr)
 {
-    //ugly but had to do this to make threading work properly
+   //ugly but had to do this to make threading work properly
     int client_fd = *(int*)client_fd_ptr;
     free(client_fd_ptr);
+    handle_client(client_fd);
+    return NULL;
+}
 
+
+void handle_client(int client_fd)
+{
 	char buffer[BUFFER_SIZE] = {0};
 	int read_val = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
 	if (read_val < 0)
 	{
 		perror("read");
-		return NULL;
+		return;
 	}
 
 	buffer[read_val] = '\0';
@@ -61,7 +67,7 @@ void* handle_client(void* client_fd_ptr)
     	serve_file(client_fd, file_path);
 
 	}
-	return NULL;
+	return;
 }
 
 //need to extend this to parse the header fully

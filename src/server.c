@@ -69,17 +69,13 @@ void run_server(int port)
 
 		printf("client connected");
 
-		pthread_t thread;
-		if (pthread_create(&thread, NULL, handle_client, client_fd_ptr) != 0)
-		{
-			perror("pthread_create");
-			free(client_fd_ptr);
-			continue;
-		}
-		else
-		{
-			pthread_detach(thread);
-		}
+		thread_t thread;
+		THREAD_CREATE(&thread, handle_client_thread, client_fd_ptr);
+
+		#ifndef _WIN32
+    		pthread_detach(thread);
+		#endif
+	
 		closesocket(client_fd);
 		printf("client disconnected");
 	}
