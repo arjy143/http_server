@@ -1,7 +1,7 @@
-#include <stdio.h>
-
+#include "server.h"
+void run_server(int port);
 int main(int argc, char* argv)
 {
-	printf("Hello");
+	run_server(8080);
 	return 0;
 }
