@@ -57,7 +57,7 @@ void run_server(int port)
 	printf("Server listening on port %d...\n", port);
 
 	//thread pool that takes 4 threads and 10 tasks
-	thread_pool_t thread_pool = thread_pool_create(4, 10);
+	thread_pool_t* thread_pool = thread_pool_create(4, 10);
 	
 	while (1)
 	{
@@ -73,16 +73,12 @@ void run_server(int port)
 		printf("client connected");
 
 		thread_pool_add_task(thread_pool, handle_client_thread, client_fd_ptr);
-
-		#ifndef _WIN32
-    		pthread_detach(thread);
-		#endif
 	
 		closesocket(client_fd);
 		printf("client disconnected");
 	}
 	
-	thread_pool_destroy(&thread_pool);
+	thread_pool_destroy(thread_pool);
 	closesocket(server_fd);
 
 	#ifdef _WIN32

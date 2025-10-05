@@ -2,6 +2,40 @@
 #include "platform.h"
 #include "platform_threading.h"
 
+thread_return_t worker_thread(thread_arg_t arg)
+{
+    thread_pool_t* pool = (thread_pool_t*)arg;
+    while(1)
+    {
+        MUTEX_LOCK(&pool->mutex);
+        while (pool->count == 0 && !pool->stop)
+        {
+            COND_WAIT(&pool->cond, &pool->mutex);
+        }
+        if (pool->stop)
+        {
+            MUTEX_UNLOCK(&pool->mutex);
+            break;
+        }
+
+        //popping connection from queue
+        task_t task = pool->queue[pool->front];
+        pool->front = (pool->front + 1)%pool->capacity;
+        pool->count--;
+        MUTEX_UNLOCK(&pool->mutex);
+
+        //call the task's function with its argument
+        task.function(task.arg);
+    }
+
+    #ifdef _WIN32
+        return 0;
+    #else
+        return NULL;
+    #endif
+}
+
+
 thread_pool_t* thread_pool_create(int num_threads, int queue_capacity)
 {
     thread_pool_t* pool = (thread_pool_t*)malloc(sizeof(thread_pool_t));
@@ -76,31 +110,3 @@ int thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* arg
     return 0;
 }
 
-void* worker_thread(void* arg)
-{
-    thread_pool_t* pool = (thread_pool_t*)arg;
-    while(1)
-    {
-        MUTEX_LOCK(&pool->mutex);
-        while (pool->count == 0 && !pool->stop)
-        {
-            COND_WAIT(&pool->cond, &pool->mutex);
-        }
-        if (pool->stop)
-        {
-            MUTEX_UNLOCK(&pool->mutex);
-            break;
-        }
-
-        //popping connection from queue
-        task_t task = pool->queue[pool->front];
-        pool->front = (pool->front + 1)%pool->capacity;
-        pool->count--;
-        MUTEX_UNLOCK(&pool->mutex);
-
-        //call the task's function with its argument
-        task.function(task.arg);
-    }
-
-    return NULL;
-}

@@ -9,7 +9,9 @@
 	typedef HANDLE thread_t;
     typedef CRITICAL_SECTION mutex_t;
     typedef CONDITION_VARIABLE cond_t;
-    
+    typedef DWORD thread_return_t;
+    typedef LPVOID thread_arg_t;
+
 	#define THREAD_CREATE(thr, func, arg) \
 		*(thr) = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)(func), (arg), 0, NULL)
     #define THREAD_JOIN(thr) WaitForSingleObject((thr), INFINITE)
@@ -29,6 +31,8 @@
 	typedef pthread_t thread_t;
     typedef pthread_mutex_t mutex_t;
     typedef pthread_cond_t cond_t;
+    typedef void* thread_return_t;
+    typedef void* thread_arg_t;
     
 	#define THREAD_CREATE(thr, func, arg) pthread_create((thr), NULL, (func), (arg))
     #define THREAD_JOIN(thr) pthread_join((thr), NULL)

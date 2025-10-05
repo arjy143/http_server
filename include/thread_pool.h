@@ -2,12 +2,13 @@
 #define THREAD_POOL_H
 
 //using my custom threading interface
+#include "platform.h"
 #include "platform_threading.h"
 
 //generic tasks - literally just a function pointer with argument
 typedef struct
 {
-    void* (*function)(void* arg);
+    void (*function)(void* arg);
     void* arg;
 } task_t;
 
@@ -22,8 +23,8 @@ typedef struct
 
     thread_t* threads;
     int num_threads;
-    thread_mutex_t mutex;
-    thread_cond_t cond;
+    mutex_t mutex;
+    cond_t cond;
 
     int stop;
 } thread_pool_t;
