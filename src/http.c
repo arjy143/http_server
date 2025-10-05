@@ -10,13 +10,13 @@
 #define BUFFER_SIZE 1024
 
 //maybe get rid of this function and just use handle_client directly in the thread pool
-void handle_client_thread(void* client_fd_ptr)
+void* handle_client_thread(void* client_fd_ptr)
 {
    //ugly but had to do this to make threading work properly
     int client_fd = *(int*)client_fd_ptr;
     free(client_fd_ptr);
     handle_client(client_fd);
-    return;
+    return NULL;
 }
 
 

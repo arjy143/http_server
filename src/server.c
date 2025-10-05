@@ -72,7 +72,7 @@ void run_server(int port)
 
 		printf("client connected");
 
-		thread_pool_add_task(thread_pool, handle_client_thread, client_fd_ptr);
+		thread_pool_add_task(thread_pool, handle_client_thread, (void*)client_fd_ptr);
 	
 		closesocket(client_fd);
 		printf("client disconnected");

@@ -85,7 +85,7 @@ void thread_pool_destroy(thread_pool_t* pool)
     free(pool);
 }
 
-int thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* arg)
+int thread_pool_add_task(thread_pool_t* pool, void* (*function)(void*), void* arg)
 {
     if (!pool || !function)
     {

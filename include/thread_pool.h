@@ -8,7 +8,7 @@
 //generic tasks - literally just a function pointer with argument
 typedef struct
 {
-    void (*function)(void* arg);
+    void* (*function)(void* arg);
     void* arg;
 } task_t;
 
@@ -32,7 +32,7 @@ typedef struct
 thread_pool_t* thread_pool_create(int num_threads, int queue_capacity);
 void thread_pool_destroy(thread_pool_t* pool);
 //adds function arg pair to the pool
-int thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* arg);
+int thread_pool_add_task(thread_pool_t* pool, void* (*function)(void*), void* arg);
 
 
 #endif
