@@ -50,6 +50,14 @@ thread_pool_t* thread_pool_create(int num_threads, int queue_capacity)
         free(pool);
         return NULL;
     }
+
+    pool->threads = (thread_t*)malloc(sizeof(thread_t) * num_threads);
+    if (!pool->threads)
+    {
+        free(pool->queue);
+        free(pool);
+        return NULL;
+    }
     pool->capacity = queue_capacity;
     pool->front = 0;
     pool->back = 0;
@@ -61,6 +69,9 @@ thread_pool_t* thread_pool_create(int num_threads, int queue_capacity)
     {
         THREAD_CREATE(&pool->threads[i], worker_thread, pool);
     }
+    MUTEX_INIT(&pool->mutex);
+    COND_INIT(&pool->cond);
+    return pool;
 }
 void thread_pool_destroy(thread_pool_t* pool)
 {
