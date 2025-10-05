@@ -1,5 +1,6 @@
 
 #include "platform.h"
+#include "platform_threading.h"
 #include "server.h"
 #include "http.h"
 
