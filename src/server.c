@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
+#include "thread_pool.h"
 
 
 
@@ -55,7 +55,9 @@ void run_server(int port)
 	}
 	
 	printf("Server listening on port %d...\n", port);
-	
+
+	//thread pool that takes 4 threads and 10 tasks
+	thread_pool_t thread_pool = thread_pool_create(4, 10);
 	
 	while (1)
 	{
@@ -70,8 +72,7 @@ void run_server(int port)
 
 		printf("client connected");
 
-		thread_t thread;
-		THREAD_CREATE(&thread, handle_client_thread, client_fd_ptr);
+		thread_pool_add_task(thread_pool, handle_client_thread, client_fd_ptr);
 
 		#ifndef _WIN32
     		pthread_detach(thread);
@@ -81,6 +82,7 @@ void run_server(int port)
 		printf("client disconnected");
 	}
 	
+	thread_pool_destroy(&thread_pool);
 	closesocket(server_fd);
 
 	#ifdef _WIN32

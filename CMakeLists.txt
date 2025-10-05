@@ -10,7 +10,8 @@ add_executable(http_server
 	src/main.c
 	src/server.c
 	src/http.c
-	src/file.c) 
+	src/file.c
+	src/thread_pool.c) 
 
 if (WIN32)
 	target_link_libraries(http_server PRIVATE ws2_32)
