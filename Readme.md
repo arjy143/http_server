@@ -4,8 +4,20 @@ This project is a simple HTTP server built using C and CMake as the build system
 
 ## Features
 
-- Handles basic HTTP requests and serves a variety of files
-- TO DO: parse http headers properly, maybe do https using openssl?, websocket, in built cache, thread pool or a non blocking type of concurrency
+DONE:
+- basic parsing of http headers
+- serves a variety of files
+- gets mime type of files and adjusts accordingly
+- supports windows and linux
+- does some sanitisation of url
+- uses a generic thread pool to distribute connection handling
+
+TO DO:
+- parse http headers properly
+- persistent connections
+- fix and extend the thread pool - currently uses basic locks, could change to non blocking concurrency?
+- https?
+- websocket?
 
 ## Build Instructions
 
