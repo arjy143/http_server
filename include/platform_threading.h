@@ -27,6 +27,9 @@
 	//posix threading
 	#include <pthread.h>
 	typedef pthread_t thread_t;
+    typedef pthread_mutex_t mutex_t;
+    typedef pthread_cond_t cond_t;
+    
 	#define THREAD_CREATE(thr, func, arg) pthread_create((thr), NULL, (func), (arg))
     #define THREAD_JOIN(thr) pthread_join((thr), NULL)
     #define THREAD_DETACH(thr) pthread_detach(thr)
