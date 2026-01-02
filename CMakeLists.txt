@@ -20,3 +20,21 @@ add_executable(http_server
 if (WIN32)
     target_link_libraries(http_server PRIVATE ws2_32)
 endif()
+
+# Test executable
+add_executable(test_http_server
+    tests/test_http_server.c
+    src/http.c
+    src/file.c
+    src/config.c
+    src/log.c)
+
+target_include_directories(test_http_server PRIVATE tests)
+
+if (WIN32)
+    target_link_libraries(test_http_server PRIVATE ws2_32)
+endif()
+
+# Enable testing
+enable_testing()
+add_test(NAME http_server_tests COMMAND test_http_server)

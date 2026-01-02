@@ -13,6 +13,8 @@ This project is a simple HTTP server built using C and CMake as the build system
 - **Graceful shutdown** - Clean exit on Ctrl+C
 - **Security** - Path sanitisation prevents directory traversal attacks
 
+Also unit tested using my custom unit testing library, https://github.com/arjy143/Attest.
+
 ## Quick Start
 
 ```bash
