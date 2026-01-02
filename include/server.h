@@ -1,6 +1,8 @@
-#ifdef SERVER_H
+#ifndef SERVER_H
 #define SERVER_H
 
-void run_server(int port);
+#include "config.h"
+
+void run_server(const server_config_t* config);
 
 #endif

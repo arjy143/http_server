@@ -6,13 +6,17 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED True)
 
 include_directories(include)
-add_executable(http_server 
-	src/main.c
-	src/server.c
-	src/http.c
-	src/file.c
-	src/thread_pool.c) 
+
+add_executable(http_server
+    src/main.c
+    src/server.c
+    src/http.c
+    src/file.c
+    src/thread_pool.c
+    src/config.c
+    src/log.c
+    src/signal.c)
 
 if (WIN32)
-	target_link_libraries(http_server PRIVATE ws2_32)
+    target_link_libraries(http_server PRIVATE ws2_32)
 endif()

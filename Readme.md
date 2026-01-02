@@ -15,7 +15,7 @@ DONE:
 TO DO:
 - parse http headers properly
 - persistent connections
-- extend the thread pool - currently uses basic locks, could change to non blocking concurrency?
+- extend the thread pool - currently uses basic locks, could change to non blocking concurrency? epoll?
 - https?
 - websocket?
 

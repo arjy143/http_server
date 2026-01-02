@@ -1,108 +1,118 @@
 #include "platform.h"
 #include "http.h"
 #include "file.h"
+#include "log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-
 #define BUFFER_SIZE 1024
 
-//maybe get rid of this function and just use handle_client directly in the thread pool
-void* handle_client_thread(void* client_fd_ptr)
+void* handle_client_thread(void* context_ptr)
 {
-   //ugly but had to do this to make threading work properly
-    int client_fd = *(int*)client_fd_ptr;
-    free(client_fd_ptr);
-    handle_client(client_fd);
+    client_context_t* context = (client_context_t*)context_ptr;
+    int client_fd = context->client_fd;
+    char doc_root[512];
+    strncpy(doc_root, context->doc_root, sizeof(doc_root) - 1);
+    doc_root[sizeof(doc_root) - 1] = '\0';
+    free(context_ptr);
+
+    handle_client(client_fd, doc_root);
     return NULL;
 }
 
-
-void handle_client(int client_fd)
+void handle_client(int client_fd, const char* doc_root)
 {
-	char buffer[BUFFER_SIZE] = {0};
-	int read_val = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
-	if (read_val < 0)
-	{
-		perror("read");
-		return;
-	}
+    char buffer[BUFFER_SIZE] = {0};
+    int read_val = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
+    if (read_val < 0)
+    {
+        LOG_ERROR("Failed to read from client socket");
+        closesocket(client_fd);
+        return;
+    }
 
-	buffer[read_val] = '\0';
+    buffer[read_val] = '\0';
 
-	printf("Request recieved:\n%s\n", buffer);
-	
-	char method[16];
-	char path[256];
-	parse_request_line(buffer, method, sizeof(method), path, sizeof(path));
+    LOG_DEBUG("Request received:\n%s", buffer);
 
-	printf("Method: %s, Path: %s\n", method, path);
+    char method[16];
+    char path[256];
+    parse_request_line(buffer, method, sizeof(method), path, sizeof(path));
 
-	//deciding what to serve
-	if (sanitise_path(path) == 0)
-	{
-		char response[512];
-		const char* forbidden_body = "403 Forbidden\n";
-		snprintf(response, sizeof(response),
-			"HTTP/1.1 403 Forbidden\r\n"
-			"Content-Type: text/plain\r\n"
-			"Content-Length: %zu\r\n"
-			"\r\n"
-			"%s",
-			strlen(forbidden_body), forbidden_body);
+    LOG_DEBUG("Method: %s, Path: %s", method, path);
 
-		send(client_fd, response, strlen(response), 0);
-		return;
-	}
+    // Check for directory traversal attack
+    if (sanitise_path(path) == 0)
+    {
+        char response[512];
+        const char* forbidden_body = "403 Forbidden\n";
+        snprintf(response, sizeof(response),
+            "HTTP/1.1 403 Forbidden\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %zu\r\n"
+            "\r\n"
+            "%s",
+            strlen(forbidden_body), forbidden_body);
 
-	if ((strcmp(path, "/") == 0))
-	{
-		serve_file(client_fd, "www/index.html");
-	}
-	else
-	{
-		char file_path[512];
-    	snprintf(file_path, sizeof(file_path), "www%s", path);
-    	serve_file(client_fd, file_path);
+        send(client_fd, response, (int)strlen(response), 0);
+        closesocket(client_fd);
+        return;
+    }
 
-	}
-	return;
+    // Build file path from document root
+    char file_path[1024];
+    if (strcmp(path, "/") == 0)
+    {
+        snprintf(file_path, sizeof(file_path), "%s/index.html", doc_root);
+    }
+    else
+    {
+        snprintf(file_path, sizeof(file_path), "%s%s", doc_root, path);
+    }
+
+    serve_file(client_fd, file_path);
+
+    // Close the socket after handling the request
+    closesocket(client_fd);
 }
 
-//need to extend this to parse the header fully
 void parse_request_line(const char* request, char* method, int method_size, char* path, int path_size)
 {
-	//e.g. GET/index.html would be the first line
-	const char* line_end = strstr(request, "\r\n");
-	if (!line_end)
-	{
-		method[0] = '\0';
-		path[0] = '\0';
-		return;
-	}
+    // Initialize outputs
+    method[0] = '\0';
+    path[0] = '\0';
 
-	int first_line_length = line_end - request;
-	char temp[256];
-	if (first_line_length > sizeof(temp) -1)
-	{
-		first_line_length = sizeof(temp) -1;
-	}
-	memcpy(temp, request, first_line_length);
-	temp[first_line_length] = '\0';
+    // Find the end of the first line (e.g., "GET /index.html HTTP/1.1")
+    const char* line_end = strstr(request, "\r\n");
+    if (!line_end)
+    {
+        return;
+    }
 
-	//split the line into words
-	sscanf(temp, "%s %s", method, path);
+    int first_line_length = line_end - request;
+    char temp[512];
+    if (first_line_length > (int)sizeof(temp) - 1)
+    {
+        first_line_length = sizeof(temp) - 1;
+    }
+    memcpy(temp, request, first_line_length);
+    temp[first_line_length] = '\0';
+
+    // Use width specifiers to prevent buffer overflow
+    // method_size - 1 and path_size - 1 to leave room for null terminator
+    char format[32];
+    snprintf(format, sizeof(format), "%%%ds %%%ds", method_size - 1, path_size - 1);
+    sscanf(temp, format, method, path);
 }
-
-
 
 int sanitise_path(const char* path)
 {
-	if (strstr(path, "..") != NULL)
-	{
-		return 0;
-	}
-	return 1;
+    // Block directory traversal attempts
+    if (strstr(path, "..") != NULL)
+    {
+        return 0;
+    }
+    return 1;
 }
