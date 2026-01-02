@@ -1,17 +1,17 @@
 # http_server
 
-This project is a simple HTTP server built using C and CMake as the build system. Compatible for both Windows and Linux.It's designed to be simple to use with 0 configuration required.
+This project is a simple HTTP server built using C and CMake as the build system. Compatible for both Windows and Linux. It's designed to be simple to use with 0 configuration required.
 
 ## Features
 
 - **Cross-platform** - Works on Windows and Linux
 - **Zero dependencies** - Single executable, no runtime dependencies
-- **Multi-threaded** - Thread pool handles concurrent connections efficiently
+- **Multi-threaded** - Thread pool handles concurrent connections efficiently, although an epoll-based approach is probably way better (but a custom thread pool is cool)
 - **Static file serving** - Serves HTML, CSS, JS, images, and more
 - **Directory listing** - Auto-generates file listing when no index.html exists
 - **Configurable** - CLI options for port, directory, threads, and verbosity
 - **Graceful shutdown** - Clean exit on Ctrl+C
-- **Security** - Path sanitization prevents directory traversal attacks
+- **Security** - Path sanitisation prevents directory traversal attacks
 
 ## Quick Start
 
