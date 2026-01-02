@@ -65,14 +65,40 @@ void handle_client(int client_fd, const char* doc_root)
     char file_path[1024];
     if (strcmp(path, "/") == 0)
     {
-        snprintf(file_path, sizeof(file_path), "%s/index.html", doc_root);
+        snprintf(file_path, sizeof(file_path), "%s", doc_root);
     }
     else
     {
         snprintf(file_path, sizeof(file_path), "%s%s", doc_root, path);
     }
 
-    serve_file(client_fd, file_path);
+    // Check if its a directory
+    if (is_directory(file_path))
+    {
+        // Try index.html first
+        char index_path[1024];
+        snprintf(index_path, sizeof(index_path), "%s/index.html", file_path);
+
+        // Check if index.html exists
+        int dummy_size;
+        char* index_data = open_file(index_path, &dummy_size);
+        if (index_data)
+        {
+            // index.html exists, serve it
+            free(index_data);
+            serve_file(client_fd, index_path);
+        }
+        else
+        {
+            // No index.html, serve directory listing
+            serve_directory_listing(client_fd, file_path, path);
+        }
+    }
+    else
+    {
+        // It's a file, serve it directly
+        serve_file(client_fd, file_path);
+    }
 
     // Close the socket after handling the request
     closesocket(client_fd);
@@ -80,7 +106,6 @@ void handle_client(int client_fd, const char* doc_root)
 
 void parse_request_line(const char* request, char* method, int method_size, char* path, int path_size)
 {
-    // Initialize outputs
     method[0] = '\0';
     path[0] = '\0';
 
