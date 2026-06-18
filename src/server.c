@@ -54,7 +54,7 @@ void run_server(const server_config_t* config)
         return;
     }
 
-    if (listen(server_fd, 10) < 0)
+    if (listen(server_fd, SOMAXCONN) < 0)
     {
         LOG_ERROR("Listen failed");
         closesocket(server_fd);

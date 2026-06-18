@@ -6,12 +6,23 @@ This project is a simple HTTP server built using C and CMake as the build system
 
 - **Cross-platform** - Works on Windows and Linux
 - **Zero dependencies** - Single executable, no runtime dependencies
-- **Multi-threaded** - Thread pool handles concurrent connections efficiently, although an epoll-based approach is probably way better (but a custom thread pool is cool)
-- **Static file serving** - Serves HTML, CSS, JS, images, and more
-- **Directory listing** - Auto-generates file listing when no index.html exists
+- **Multi-threaded** - A worker thread pool handles concurrent connections (the same
+  model `cpp-httplib` uses - stays simple and fully cross-platform)
+- **Streaming file serving** - Files are streamed in 64 KB chunks, so memory stays flat
+  regardless of file size
+- **HTTP keep-alive** - Reuses connections (HTTP/1.1), with an idle timeout so silent
+  connections don't pin a worker
+- **Range requests** - `206 Partial Content` support, so browsers can seek in
+  `<video>`/`<audio>` and resume downloads
+- **HEAD support** - Returns headers only; unsupported methods get `405 Method Not Allowed`
+- **Static file serving** - Serves HTML, CSS, JS, images, fonts, media, and more, with
+  correct MIME types and charset
+- **Directory listing** - Auto-generates a file listing when no index.html exists, and
+  redirects `/dir` to `/dir/` so relative links resolve
 - **Configurable** - CLI options for port, directory, threads, and verbosity
 - **Graceful shutdown** - Clean exit on Ctrl+C
-- **Security** - Path sanitisation prevents directory traversal attacks
+- **Security** - Paths are URL-decoded before a `..`-segment check, blocking directory
+  traversal (including percent-encoded `%2e%2e` attempts)
 
 Also unit tested using my custom unit testing library, https://github.com/arjy143/Attest.
 
@@ -93,18 +104,28 @@ Cross-platform compatibility is achieved through header-only abstractions:
 
 ## Supported MIME Types
 
+Text types are served with `; charset=utf-8`.
+
 | Extension | MIME Type |
 |-----------|-----------|
 | `.html`, `.htm` | text/html |
 | `.css` | text/css |
-| `.js` | application/javascript |
-| `.json` | application/json |
+| `.js`, `.mjs` | application/javascript |
+| `.json`, `.map` | application/json |
+| `.xml` | application/xml |
+| `.txt` | text/plain |
 | `.png` | image/png |
 | `.jpg`, `.jpeg` | image/jpeg |
 | `.gif` | image/gif |
+| `.webp` | image/webp |
 | `.svg` | image/svg+xml |
 | `.ico` | image/x-icon |
 | `.pdf` | application/pdf |
-| `.txt` | text/plain |
-| `.xml` | application/xml |
+| `.wasm` | application/wasm |
+| `.mp4` | video/mp4 |
+| `.webm` | video/webm |
+| `.ogg` | audio/ogg |
+| `.mp3` | audio/mpeg |
+| `.wav` | audio/wav |
 | `.woff`, `.woff2` | font/woff, font/woff2 |
+| `.ttf`, `.otf` | font/ttf, font/otf |

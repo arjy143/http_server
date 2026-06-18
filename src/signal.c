@@ -45,6 +45,9 @@ void signal_init(void)
 
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
+
+    // Don't let a write to a closed client socket kill the whole server.
+    signal(SIGPIPE, SIG_IGN);
 }
 
 #endif

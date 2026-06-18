@@ -27,7 +27,8 @@ add_executable(test_http_server
     src/http.c
     src/file.c
     src/config.c
-    src/log.c)
+    src/log.c
+    src/signal.c)
 
 target_include_directories(test_http_server PRIVATE tests)
 

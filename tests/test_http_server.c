@@ -81,42 +81,42 @@ REGISTER_TEST(parse_request_line_nested_path)
 }
 
 // ============================================================================
-// Tests for sanitise_path
+// Tests for path_is_safe
 // ============================================================================
 
-REGISTER_TEST(sanitise_path_normal_path)
+REGISTER_TEST(path_is_safe_normal_path)
 {
-    ATTEST_EQUAL(sanitise_path("/index.html"), 1);
+    ATTEST_EQUAL(path_is_safe("/index.html"), 1);
 }
 
-REGISTER_TEST(sanitise_path_nested_path)
+REGISTER_TEST(path_is_safe_nested_path)
 {
-    ATTEST_EQUAL(sanitise_path("/css/style.css"), 1);
+    ATTEST_EQUAL(path_is_safe("/css/style.css"), 1);
 }
 
-REGISTER_TEST(sanitise_path_blocks_dotdot)
+REGISTER_TEST(path_is_safe_blocks_dotdot)
 {
-    ATTEST_EQUAL(sanitise_path("/../etc/passwd"), 0);
+    ATTEST_EQUAL(path_is_safe("/../etc/passwd"), 0);
 }
 
-REGISTER_TEST(sanitise_path_blocks_dotdot_middle)
+REGISTER_TEST(path_is_safe_blocks_dotdot_middle)
 {
-    ATTEST_EQUAL(sanitise_path("/path/../secret"), 0);
+    ATTEST_EQUAL(path_is_safe("/path/../secret"), 0);
 }
 
-REGISTER_TEST(sanitise_path_blocks_dotdot_end)
+REGISTER_TEST(path_is_safe_blocks_dotdot_end)
 {
-    ATTEST_EQUAL(sanitise_path("/path/to/.."), 0);
+    ATTEST_EQUAL(path_is_safe("/path/to/.."), 0);
 }
 
-REGISTER_TEST(sanitise_path_allows_single_dot)
+REGISTER_TEST(path_is_safe_allows_single_dot)
 {
-    ATTEST_EQUAL(sanitise_path("/./file.txt"), 1);
+    ATTEST_EQUAL(path_is_safe("/./file.txt"), 1);
 }
 
-REGISTER_TEST(sanitise_path_root)
+REGISTER_TEST(path_is_safe_root)
 {
-    ATTEST_EQUAL(sanitise_path("/"), 1);
+    ATTEST_EQUAL(path_is_safe("/"), 1);
 }
 
 // ============================================================================
@@ -125,22 +125,22 @@ REGISTER_TEST(sanitise_path_root)
 
 REGISTER_TEST(mime_type_html)
 {
-    ATTEST_EQUAL(get_mime_type("/index.html"), "text/html");
+    ATTEST_EQUAL(get_mime_type("/index.html"), "text/html; charset=utf-8");
 }
 
 REGISTER_TEST(mime_type_htm)
 {
-    ATTEST_EQUAL(get_mime_type("/page.htm"), "text/html");
+    ATTEST_EQUAL(get_mime_type("/page.htm"), "text/html; charset=utf-8");
 }
 
 REGISTER_TEST(mime_type_css)
 {
-    ATTEST_EQUAL(get_mime_type("/style.css"), "text/css");
+    ATTEST_EQUAL(get_mime_type("/style.css"), "text/css; charset=utf-8");
 }
 
 REGISTER_TEST(mime_type_js)
 {
-    ATTEST_EQUAL(get_mime_type("/app.js"), "application/javascript");
+    ATTEST_EQUAL(get_mime_type("/app.js"), "application/javascript; charset=utf-8");
 }
 
 REGISTER_TEST(mime_type_png)
@@ -175,12 +175,12 @@ REGISTER_TEST(mime_type_ico)
 
 REGISTER_TEST(mime_type_txt)
 {
-    ATTEST_EQUAL(get_mime_type("/readme.txt"), "text/plain");
+    ATTEST_EQUAL(get_mime_type("/readme.txt"), "text/plain; charset=utf-8");
 }
 
 REGISTER_TEST(mime_type_json)
 {
-    ATTEST_EQUAL(get_mime_type("/data.json"), "application/json");
+    ATTEST_EQUAL(get_mime_type("/data.json"), "application/json; charset=utf-8");
 }
 
 REGISTER_TEST(mime_type_pdf)
@@ -190,7 +190,27 @@ REGISTER_TEST(mime_type_pdf)
 
 REGISTER_TEST(mime_type_xml)
 {
-    ATTEST_EQUAL(get_mime_type("/config.xml"), "application/xml");
+    ATTEST_EQUAL(get_mime_type("/config.xml"), "application/xml; charset=utf-8");
+}
+
+REGISTER_TEST(mime_type_webp)
+{
+    ATTEST_EQUAL(get_mime_type("/photo.webp"), "image/webp");
+}
+
+REGISTER_TEST(mime_type_mp4)
+{
+    ATTEST_EQUAL(get_mime_type("/clip.mp4"), "video/mp4");
+}
+
+REGISTER_TEST(mime_type_wasm)
+{
+    ATTEST_EQUAL(get_mime_type("/module.wasm"), "application/wasm");
+}
+
+REGISTER_TEST(mime_type_mjs)
+{
+    ATTEST_EQUAL(get_mime_type("/module.mjs"), "application/javascript; charset=utf-8");
 }
 
 REGISTER_TEST(mime_type_woff)
@@ -529,4 +549,97 @@ REGISTER_TEST(is_directory_returns_false_for_file)
 REGISTER_TEST(is_directory_returns_false_for_nonexistent)
 {
     ATTEST_EQUAL(is_directory("/nonexistent/path/12345"), 0);
+}
+
+// ============================================================================
+// Tests for url_decode
+// ============================================================================
+
+REGISTER_TEST(url_decode_plain_passthrough)
+{
+    char out[256];
+    ATTEST_EQUAL(url_decode("/index.html", out, sizeof(out)), 0);
+    ATTEST_EQUAL(out, "/index.html");
+}
+
+REGISTER_TEST(url_decode_space)
+{
+    char out[256];
+    ATTEST_EQUAL(url_decode("/a%20b.txt", out, sizeof(out)), 0);
+    ATTEST_EQUAL(out, "/a b.txt");
+}
+
+REGISTER_TEST(url_decode_encoded_dotdot)
+{
+    char out[256];
+    ATTEST_EQUAL(url_decode("/%2e%2e/etc", out, sizeof(out)), 0);
+    ATTEST_EQUAL(out, "/../etc");
+}
+
+REGISTER_TEST(url_decode_plus_is_literal)
+{
+    // '+' is a valid path character and must NOT become a space.
+    char out[256];
+    ATTEST_EQUAL(url_decode("/a+b.txt", out, sizeof(out)), 0);
+    ATTEST_EQUAL(out, "/a+b.txt");
+}
+
+REGISTER_TEST(url_decode_malformed_escape_fails)
+{
+    char out[256];
+    ATTEST_EQUAL(url_decode("/%zz", out, sizeof(out)), -1);
+}
+
+REGISTER_TEST(url_decode_truncated_escape_fails)
+{
+    char out[256];
+    ATTEST_EQUAL(url_decode("/file%2", out, sizeof(out)), -1);
+}
+
+// Percent-encoded traversal must be caught once decoded.
+REGISTER_TEST(path_is_safe_blocks_encoded_dotdot)
+{
+    char out[256];
+    url_decode("/%2e%2e/%2e%2e/etc/passwd", out, sizeof(out));
+    ATTEST_EQUAL(path_is_safe(out), 0);
+}
+
+// ============================================================================
+// Tests for parse_range
+// ============================================================================
+
+REGISTER_TEST(parse_range_basic)
+{
+    long s = 0, e = 0;
+    ATTEST_EQUAL(parse_range("bytes=0-99", &s, &e), 1);
+    ATTEST_EQUAL(s, 0L);
+    ATTEST_EQUAL(e, 99L);
+}
+
+REGISTER_TEST(parse_range_open_ended)
+{
+    long s = 0, e = 0;
+    ATTEST_EQUAL(parse_range("bytes=100-", &s, &e), 1);
+    ATTEST_EQUAL(s, 100L);
+    ATTEST_EQUAL(e, -1L);
+}
+
+REGISTER_TEST(parse_range_suffix)
+{
+    long s = 0, e = 0;
+    ATTEST_EQUAL(parse_range("bytes=-500", &s, &e), 1);
+    ATTEST_EQUAL(s, -1L);
+    ATTEST_EQUAL(e, 500L);
+}
+
+REGISTER_TEST(parse_range_missing_bytes_prefix)
+{
+    long s = 0, e = 0;
+    ATTEST_EQUAL(parse_range("0-99", &s, &e), 0);
+}
+
+REGISTER_TEST(parse_range_reversed_is_invalid)
+{
+    long s = 0, e = 0;
+    ATTEST_EQUAL(parse_range("bytes=99-0", &s, &e), 0);
 }

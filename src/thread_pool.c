@@ -2,6 +2,8 @@
 #include "platform.h"
 #include "platform_threading.h"
 
+#include <stdlib.h>
+
 thread_return_t worker_thread(thread_arg_t arg)
 {
     thread_pool_t* pool = (thread_pool_t*)arg;
@@ -64,13 +66,16 @@ thread_pool_t* thread_pool_create(int num_threads, int queue_capacity)
     pool->count = 0;
     pool->num_threads = num_threads;
     pool->stop = 0;
-    
+
+    // Init sync primitives BEFORE spawning workers - otherwise a worker can run
+    // and lock an uninitialized mutex/cond (data race / undefined behaviour).
+    MUTEX_INIT(&pool->mutex);
+    COND_INIT(&pool->cond);
+
     for (int i = 0; i < num_threads; i++)
     {
         THREAD_CREATE(&pool->threads[i], worker_thread, pool);
     }
-    MUTEX_INIT(&pool->mutex);
-    COND_INIT(&pool->cond);
     return pool;
 }
 void thread_pool_destroy(thread_pool_t* pool)

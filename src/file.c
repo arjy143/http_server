@@ -12,45 +12,55 @@
     #include <dirent.h>
 #endif
 
-char* open_file(const char* file_path, int* out_size)
+// MSVC's <sys/stat.h> doesn't define these POSIX helpers.
+#ifndef S_ISDIR
+    #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
+#endif
+#ifndef S_ISREG
+    #define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)
+#endif
+
+int send_all(int client_fd, const char* buf, size_t len)
 {
-    FILE* file = fopen(file_path, "rb");
-    if (!file)
+    size_t total = 0;
+    while (total < len)
     {
-        return NULL;
+        int n = send(client_fd, buf + total, (int)(len - total), SEND_FLAGS);
+        if (n <= 0)
+        {
+            return -1;
+        }
+        total += (size_t)n;
     }
+    return (int)total;
+}
 
-    // Get file size
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+void send_error_response(int client_fd, int code, const char* status_text, int keep_alive, const char* extra_headers)
+{
+    char body[128];
+    int body_len = snprintf(body, sizeof(body), "%d %s\n", code, status_text);
 
-    if (size < 0)
-    {
-        fclose(file);
-        return NULL;
-    }
+    char header[512];
+    int header_len = snprintf(header, sizeof(header),
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "Content-Length: %d\r\n"
+        "%s"
+        "Connection: %s\r\n"
+        "\r\n",
+        code, status_text, body_len,
+        extra_headers ? extra_headers : "",
+        keep_alive ? "keep-alive" : "close");
 
-    char* buffer = (char*)malloc(size);
-    if (!buffer)
-    {
-        LOG_ERROR("Failed to allocate memory for file: %s", file_path);
-        fclose(file);
-        return NULL;
-    }
+    send_all(client_fd, header, (size_t)header_len);
+    send_all(client_fd, body, (size_t)body_len);
+}
 
-    size_t read_bytes = fread(buffer, 1, size, file);
-    fclose(file);
-
-    if ((long)read_bytes != size)
-    {
-        LOG_ERROR("Failed to read complete file: %s", file_path);
-        free(buffer);
-        return NULL;
-    }
-
-    *out_size = (int)size;
-    return buffer;
+static void send_range_not_satisfiable(int client_fd, long long file_size, int keep_alive)
+{
+    char extra[64];
+    snprintf(extra, sizeof(extra), "Content-Range: bytes */%lld\r\n", file_size);
+    send_error_response(client_fd, 416, "Range Not Satisfiable", keep_alive, extra);
 }
 
 int is_directory(const char* path)
@@ -63,13 +73,24 @@ int is_directory(const char* path)
     return S_ISDIR(st.st_mode);
 }
 
-void serve_directory_listing(int client_fd, const char* dir_path, const char* url_path)
+int is_regular_file(const char* path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0)
+    {
+        return 0;
+    }
+    return S_ISREG(st.st_mode);
+}
+
+void serve_directory_listing(int client_fd, const char* dir_path, const char* url_path, int keep_alive)
 {
     // Start building HTML response
     char* html = malloc(65536);  // 64KB buffer for directory listing
     if (!html)
     {
         LOG_ERROR("Failed to allocate memory for directory listing");
+        send_error_response(client_fd, 500, "Internal Server Error", 0, NULL);
         return;
     }
 
@@ -178,58 +199,142 @@ void serve_directory_listing(int client_fd, const char* dir_path, const char* ur
 
     // Send HTTP response
     char header[256];
-    snprintf(header, sizeof(header),
+    int header_len = snprintf(header, sizeof(header),
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: text/html; charset=utf-8\r\n"
         "Content-Length: %d\r\n"
+        "Connection: %s\r\n"
         "\r\n",
-        offset);
+        offset, keep_alive ? "keep-alive" : "close");
 
-    send(client_fd, header, (int)strlen(header), 0);
-    send(client_fd, html, offset, 0);
+    send_all(client_fd, header, (size_t)header_len);
+    send_all(client_fd, html, (size_t)offset);
     free(html);
 
     LOG_DEBUG("Served directory listing: %s", dir_path);
 }
 
-void serve_file(int client_fd, const char* file_path)
+void serve_file(int client_fd, const char* file_path, const http_request_t* req)
 {
-    int file_size;
-    char* file_data = open_file(file_path, &file_size);
-
-    if (!file_data)
+    struct stat st;
+    if (stat(file_path, &st) != 0 || !S_ISREG(st.st_mode))
     {
         LOG_DEBUG("File not found: %s", file_path);
-        char response[512];
-        const char* not_found_body = "404 Not Found\n";
-        snprintf(response, sizeof(response),
-            "HTTP/1.1 404 Not Found\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: %zu\r\n"
-            "\r\n"
-            "%s",
-            strlen(not_found_body), not_found_body);
-
-        send(client_fd, response, (int)strlen(response), 0);
+        send_error_response(client_fd, 404, "Not Found", req->keep_alive, NULL);
         return;
     }
 
+    long long file_size = (long long)st.st_size;
     const char* mime_type = get_mime_type(file_path);
+    int is_head = (strcmp(req->method, "HEAD") == 0);
+
+    long long start = 0;
+    long long end = file_size - 1;  // inclusive
+    int partial = 0;
+
+    if (req->has_range)
+    {
+        if (req->range_start < 0)
+        {
+            // Suffix range: last range_end bytes.
+            long long suffix = (long long)req->range_end;
+            if (suffix <= 0)
+            {
+                send_range_not_satisfiable(client_fd, file_size, req->keep_alive);
+                return;
+            }
+            if (suffix > file_size) suffix = file_size;
+            start = file_size - suffix;
+            end = file_size - 1;
+        }
+        else
+        {
+            start = (long long)req->range_start;
+            end = (req->range_end < 0) ? file_size - 1 : (long long)req->range_end;
+            if (end >= file_size) end = file_size - 1;
+            if (file_size == 0 || start >= file_size || start > end)
+            {
+                send_range_not_satisfiable(client_fd, file_size, req->keep_alive);
+                return;
+            }
+        }
+        partial = 1;
+    }
+
+    long long content_length = partial ? (end - start + 1) : file_size;
 
     char header[512];
-    snprintf(header, sizeof(header),
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: %s\r\n"
-        "Content-Length: %d\r\n"
-        "\r\n",
-        mime_type,
-        file_size);
+    int header_len;
+    if (partial)
+    {
+        header_len = snprintf(header, sizeof(header),
+            "HTTP/1.1 206 Partial Content\r\n"
+            "Content-Type: %s\r\n"
+            "Content-Length: %lld\r\n"
+            "Content-Range: bytes %lld-%lld/%lld\r\n"
+            "Accept-Ranges: bytes\r\n"
+            "Connection: %s\r\n"
+            "\r\n",
+            mime_type, content_length, start, end, file_size,
+            req->keep_alive ? "keep-alive" : "close");
+    }
+    else
+    {
+        header_len = snprintf(header, sizeof(header),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: %s\r\n"
+            "Content-Length: %lld\r\n"
+            "Accept-Ranges: bytes\r\n"
+            "Connection: %s\r\n"
+            "\r\n",
+            mime_type, content_length,
+            req->keep_alive ? "keep-alive" : "close");
+    }
 
-    send(client_fd, header, (int)strlen(header), 0);
-    send(client_fd, file_data, file_size, 0);
-    free(file_data);
+    if (send_all(client_fd, header, (size_t)header_len) < 0)
+    {
+        return;
+    }
 
-    LOG_DEBUG("Served: %s (%d bytes, %s)", file_path, file_size, mime_type);
+    // HEAD requests and empty bodies carry no payload.
+    if (is_head || content_length == 0)
+    {
+        LOG_DEBUG("Served headers: %s (%lld bytes, %s)", file_path, content_length, mime_type);
+        return;
+    }
+
+    FILE* file = fopen(file_path, "rb");
+    if (!file)
+    {
+        // Headers already sent; can't recover gracefully, just stop writing.
+        LOG_ERROR("Failed to open file after stat: %s", file_path);
+        return;
+    }
+
+    if (start > 0)
+    {
+        fseek(file, (long)start, SEEK_SET);
+    }
+
+    char buf[65536];
+    long long remaining = content_length;
+    while (remaining > 0)
+    {
+        size_t want = remaining < (long long)sizeof(buf) ? (size_t)remaining : sizeof(buf);
+        size_t got = fread(buf, 1, want, file);
+        if (got == 0)
+        {
+            break;
+        }
+        if (send_all(client_fd, buf, got) < 0)
+        {
+            break;
+        }
+        remaining -= (long long)got;
+    }
+    fclose(file);
+
+    LOG_DEBUG("Served: %s (%lld bytes, %s)", file_path, content_length, mime_type);
 }
 
 const char* get_mime_type(const char* file_path)
@@ -240,64 +345,34 @@ const char* get_mime_type(const char* file_path)
         return "application/octet-stream";
     }
 
-    if (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0)
-    {
-        return "text/html";
-    }
-    else if (strcmp(ext, ".css") == 0)
-    {
-        return "text/css";
-    }
-    else if (strcmp(ext, ".js") == 0)
-    {
-        return "application/javascript";
-    }
-    else if (strcmp(ext, ".png") == 0)
-    {
-        return "image/png";
-    }
-    else if (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".jpeg") == 0)
-    {
-        return "image/jpeg";
-    }
-    else if (strcmp(ext, ".gif") == 0)
-    {
-        return "image/gif";
-    }
-    else if (strcmp(ext, ".svg") == 0)
-    {
-        return "image/svg+xml";
-    }
-    else if (strcmp(ext, ".ico") == 0)
-    {
-        return "image/x-icon";
-    }
-    else if (strcmp(ext, ".txt") == 0)
-    {
-        return "text/plain";
-    }
-    else if (strcmp(ext, ".json") == 0)
-    {
-        return "application/json";
-    }
-    else if (strcmp(ext, ".pdf") == 0)
-    {
-        return "application/pdf";
-    }
-    else if (strcmp(ext, ".xml") == 0)
-    {
-        return "application/xml";
-    }
-    else if (strcmp(ext, ".woff") == 0)
-    {
-        return "font/woff";
-    }
-    else if (strcmp(ext, ".woff2") == 0)
-    {
-        return "font/woff2";
-    }
-    else
-    {
-        return "application/octet-stream";
-    }
+    // Text formats carry an explicit charset so browsers render them correctly.
+    if (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0) return "text/html; charset=utf-8";
+    if (strcmp(ext, ".css") == 0)                              return "text/css; charset=utf-8";
+    if (strcmp(ext, ".js") == 0 || strcmp(ext, ".mjs") == 0)   return "application/javascript; charset=utf-8";
+    if (strcmp(ext, ".json") == 0 || strcmp(ext, ".map") == 0) return "application/json; charset=utf-8";
+    if (strcmp(ext, ".txt") == 0)                              return "text/plain; charset=utf-8";
+    if (strcmp(ext, ".xml") == 0)                              return "application/xml; charset=utf-8";
+
+    if (strcmp(ext, ".svg") == 0)                              return "image/svg+xml";
+    if (strcmp(ext, ".png") == 0)                              return "image/png";
+    if (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".jpeg") == 0) return "image/jpeg";
+    if (strcmp(ext, ".gif") == 0)                              return "image/gif";
+    if (strcmp(ext, ".webp") == 0)                             return "image/webp";
+    if (strcmp(ext, ".ico") == 0)                              return "image/x-icon";
+
+    if (strcmp(ext, ".pdf") == 0)                              return "application/pdf";
+    if (strcmp(ext, ".wasm") == 0)                             return "application/wasm";
+
+    if (strcmp(ext, ".mp4") == 0)                              return "video/mp4";
+    if (strcmp(ext, ".webm") == 0)                             return "video/webm";
+    if (strcmp(ext, ".ogg") == 0)                              return "audio/ogg";
+    if (strcmp(ext, ".mp3") == 0)                              return "audio/mpeg";
+    if (strcmp(ext, ".wav") == 0)                              return "audio/wav";
+
+    if (strcmp(ext, ".woff") == 0)                             return "font/woff";
+    if (strcmp(ext, ".woff2") == 0)                            return "font/woff2";
+    if (strcmp(ext, ".ttf") == 0)                              return "font/ttf";
+    if (strcmp(ext, ".otf") == 0)                              return "font/otf";
+
+    return "application/octet-stream";
 }
